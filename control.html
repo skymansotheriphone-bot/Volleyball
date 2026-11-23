@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Volleyball Remote Control</title>
+<script src="https://unpkg.com"></script>
+<style>
+  @import url('https://googleapis.com');
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
+  body { background: #0f172a; color: #f8fafc; padding: 16px; }
+
+  .ctrl-card {
+    background: #1e293b; border-radius: 12px; padding: 14px; margin-bottom: 14px;
+    border: 1px solid #334155;
+  }
+  .status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+  .badge-wait { background: #eab308; color: #000; }
+  .badge-ok { background: #22c55e; color: #000; }
+
+  .team-ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .team-panel {
+    background: #0f172a; padding: 12px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  input[type="text"] {
+    width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #475569;
+    background: #1e293b; color: #fff; font-weight: 800; text-align: center;
+    text-transform: uppercase; font-size: 14px;
+  }
+  .color-picker-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  input[type="color"] { border: none; width: 32px; height: 26px; background: none; }
+  .big-score { font-size: 48px; font-weight: 900; line-height: 1; }
+
+  .btn {
+    width: 100%; padding: 14px; border: none; border-radius: 8px;
+    font-weight: 800; font-size: 15px; cursor: pointer; text-transform: uppercase;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-plus { background: #22c55e; color: #052e16; font-size: 20px; }
+  .btn-minus { background: #334155; color: #cbd5e1; padding: 8px; font-size: 13px; }
+  .btn-serve { background: #334155; color: #94a3b8; }
+  .btn-serve.serving { background: #facc15; color: #000; }
+  .btn-action { background: #3b82f6; color: #fff; margin-bottom: 8px; }
+  .btn-danger { background: #ef4444; color: #fff; }
+</style>
+</head>
+<body>
+  <div class="ctrl-card status-bar">
+    <span>IPHONE LINK</span>
+    <span id="conn-badge" class="badge badge-wait">Connecting...</span>
+  </div>
+
+  <div class="ctrl-card">
+    <input type="text" id="in-title" value="CLUB VOLLEYBALL • BEST OF 3" maxlength="32" oninput="sync()" placeholder="Match Header">
+  </div>
+
+  <div class="team-ctrl-grid">
+    <div class="team-panel">
+      <input type="text" id="in-name-a" value="HOME TEAM" maxlength="12" oninput="sync()">
+      <div class="color-picker-row"><span>Jersey:</span><input type="color" id="in-color-a" value="#3b82f6" onchange="sync()"></div>
+      <div class="big-score" id="ctrl-score-a">0</div>
+      <button class="btn btn-plus" onclick="addPoint('a', 1)">+1 POINT</button>
+      <button class="btn btn-minus" onclick="addPoint('a', -1)">-1 Point</button>
+      <button class="btn btn-serve serving" id="btn-serve-a" onclick="setServe('a')">🏐 SERVING</button>
+    </div>
+
+    <div class="team-panel">
+      <input type="text" id="in-name-b" value="AWAY TEAM" maxlength="12" oninput="sync()">
+      <div class="color-picker-row"><span>Jersey:</span><input type="color" id="in-color-b" value="#ef4444" onchange="sync()"></div>
+      <div class="big-score" id="ctrl-score-b">0</div>
+      <button class="btn btn-plus" onclick="addPoint('b', 1)">+1 POINT</button>
+      <button class="btn btn-minus" onclick="addPoint('b', -1)">-1 Point</button>
+      <button class="btn btn-serve" id="btn-serve-b" onclick="setServe('b')">SET SERVE</button>
+    </div>
+  </div>
+
+  <div class="ctrl-card" style="margin-top: 14px;">
+    <div style="font-size: 13px; font-weight: 800; margin-bottom: 8px; color: #94a3b8;">SET MANAGEMENT (BEST OF 3)</div>
+    <button class="btn btn-action" onclick="finishSet()">FINISH SET & SAVE SCORE</button>
+    <div id="set-history-list" style="font-size: 12px; color: #cbd5e1; margin: 8px 0;"></div>
+    <button class="btn btn-danger" onclick="resetMatch()" style="margin-top: 8px;">RESET ENTIRE MATCH</button>
+  </div>
+
+<script>
+  const room = new URLSearchParams(window.location.search).get('room') || 'skymanvb26';
+  let state = {
+    title: 'CLUB VOLLEYBALL • BEST OF 3',
+    nameA: 'HOME TEAM', colorA: '#3b82f6', scoreA: 0,
+    nameB: 'AWAY TEAM', colorB: '#ef4444', scoreB: 0,
+    serve: 'a', completedSets: []
+  };
+
+  const peer = new Peer();
+  let conn;
+
+  peer.on('open', connectToOverlay);
+
+  function connectToOverlay() {
+    conn = peer.connect('vb-overlay-' + room);
+    conn.on('open', () => {
+      const badge = document.getElementById('conn-badge');
+      badge.textContent = 'Connected to iPhone';
+      badge.className = 'badge badge-ok';
+      sync();
+    });
+    conn.on('close', () => {
+      const badge = document.getElementById('conn-badge');
+      badge.textContent = 'Reconnecting...';
+      badge.className = 'badge badge-wait';
+      setTimeout(connectToOverlay, 2000);
+    });
+  }
+
+  function addPoint(team, delta) {
+    if (team === 'a') {
+      state.scoreA = Math.max(0, state.scoreA + delta);
+      if (delta > 0) state.serve = 'a';
+    } else {
+      state.scoreB = Math.max(0, state.scoreB + delta);
+      if (delta > 0) state.serve = 'b';
+    }
+    sync();
+  }
+
+  function setServe(team) { state.serve = team; sync(); }
+
+  function finishSet() {
+    if (state.completedSets.length >= 3) return alert('Match already has 3 sets recorded.');
+    if (!confirm(`Save Set ${state.completedSets.length + 1} (${state.scoreA} - ${state.scoreB}) and start next set?`)) return;
+    state.completedSets.push({ a: state.scoreA, b: state.scoreB });
+    state.scoreA = 0; state.scoreB = 0;
+    sync();
+  }
+
+  function resetMatch() {
+    if (!confirm('Reset all scores and previous sets to 0?')) return;
+    state.scoreA = 0; state.scoreB = 0; state.completedSets = []; state.serve = 'a';
+    sync();
+  }
+
+  function sync() {
+    state.title = document.getElementById('in-title').value;
+    state.nameA = document.getElementById('in-name-a').value.slice(0, 12);
+    state.colorA = document.getElementById('in-color-a').value;
+    state.nameB = document.getElementById('in-name-b').value.slice(0, 12);
+    state.colorB = document.getElementById('in-color-b').value;
+
+    document.getElementById('ctrl-score-a').textContent = state.scoreA;
+    document.getElementById('ctrl-score-b').textContent = state.scoreB;
+
+    document.getElementById('btn-serve-a').className = state.serve === 'a' ? 'btn btn-serve serving' : 'btn btn-serve';
+    document.getElementById('btn-serve-a').textContent = state.serve === 'a' ? '🏐 SERVING' : 'SET SERVE';
+    
+    document.getElementById('btn-serve-b').className = state.serve === 'b' ? 'btn btn-serve serving' : 'btn btn-serve';
+    document.getElementById('btn-serve-b').textContent = state.serve === 'b' ? '🏐 SERVING' : 'SET SERVE';
+
+    document.getElementById('set-history-list').innerHTML = state.completedSets.map((s, i) => `Set ${i+1}: <b>${s.a} - ${s.b}</b>`).join(' &nbsp;|&nbsp; ');
+
+    if (conn && conn.open) conn.send(state);
+  }
+</script>
+</body>
+</html>
