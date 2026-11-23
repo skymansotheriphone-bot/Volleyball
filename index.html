@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Club Volleyball Scorebug & Remote</title>
+<script src="https://unpkg.com"></script>
+<style>
+  @import url('https://googleapis.com');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
+  
+  body { background: transparent; overflow: hidden; }
+
+  /* ================= OVERLAY STYLES (FOR IPHONE STREAM) ================= */
+  #overlay-view {
+    width: 100vw; height: 100vh;
+    padding: 32px;
+    display: flex; align-items: flex-start; justify-content: flex-start;
+  }
+
+  .scorebug {
+    display: flex; flex-direction: column;
+    background: rgba(15, 20, 30, 0.92);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.15);
+    min-width: 390px;
+  }
+
+  .bug-header {
+    background: #090d16;
+    color: #94a3b8;
+    font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+    padding: 5px 14px;
+    display: flex; justify-content: space-between; text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .team-row {
+    display: flex; align-items: center; height: 48px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .team-row:last-child { border-bottom: none; }
+
+  .color-bar { width: 8px; height: 100%; }
+
+  .team-name {
+    flex: 1; color: #ffffff; font-size: 18px; font-weight: 800;
+    padding: 0 12px; letter-spacing: 0.5px; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden;
+  }
+
+  .serve-icon {
+    width: 28px; display: flex; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .serve-icon.active { opacity: 1; }
+  .vb-ball {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fde047, #eab308);
+    box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+  }
+
+  /* Previous Set Scores */
+  .prev-sets {
+    display: flex; gap: 6px; padding-right: 10px;
+  }
+  .set-pill {
+    background: rgba(255,255,255,0.08);
+    color: #94a3b8; font-size: 13px; font-weight: 700;
+    width: 26px; height: 26px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .set-pill.won {
+    background: rgba(34, 197, 94, 0.25);
+    color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);
+  }
+
+  /* Sets Won Box */
+  .sets-won {
+    width: 38px; height: 100%;
+    background: rgba(0,0,0,0.45);
+    color: #facc15; font-size: 19px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    border-left: 1px solid rgba(255,255,255,0.1);
+  }
+
+  /* Current Points Box */
+  .current-score {
+    width: 56px; height: 100%;
+    background: #ffffff; color: #0f172a;
+    font-size: 24px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ================= CONTROLLER STYLES (FOR PIXEL 8 PRO) ================= */
+  #controller-view {
+    display: none; background: #0f172a; color: #f8fafc;
+    height: 100vh; overflow-y: auto; padding: 16px;
+  }
+
+  .ctrl-card {
+    background: #1e293b; border-radius: 12px; padding: 14px; margin-bottom: 14px;
+    border: 1px solid #334155;
+  }
+
+  .status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; font-weight: 700;
+  }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+  .badge-wait { background: #eab308; color: #000; }
+  .badge-ok { background: #22c55e; color: #000; }
+
+  .team-ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .team-panel {
+    background: #0f172a; padding: 12px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+
+  input[type="text"] {
+    width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #475569;
+    background: #1e293b; color: #fff; font-weight: 800; text-align: center;
+    text-transform: uppercase; font-size: 14px;
+  }
+
+  .color-picker-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  input[type="color"] { border: none; width: 32px; height: 26px; background: none; }
+
+  .big-score { font-size: 48px; font-weight: 900; line-height: 1; }
+
+  .btn {
+    width: 100%; padding: 14px; border: none; border-radius: 8px;
+    font-weight: 800; font-size: 15px; cursor: pointer; text-transform: uppercase;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-plus { background: #22c55e; color: #052e16; font-size: 20px; }
+  .btn-minus { background: #334155; color: #cbd5e1; padding: 8px; font-size: 13px; }
+  .btn-serve { background: #334155; color: #94a3b8; }
+  .btn-serve.serving { background: #facc15; color: #000; }
+  .btn-action { background: #3b82f6; color: #fff; margin-bottom: 8px; }
+  .btn-danger { background: #ef4444; color: #fff; }
+
+  .set-history-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .set-box { background: #0f172a; padding: 8px; border-radius: 6px; font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+
+  <!-- OVERLAY DISPLAY (Shown by default for PRISM Live) -->
+  <div id="overlay-view">
+    <div class="scorebug">
+      <div class="bug-header">
+        <span id="ov-match-title">CLUB VOLLEYBALL • BEST OF 3</span>
+        <span id="ov-set-label">SET 1</span>
+      </div>
+      
+      <!-- TEAM A -->
+      <div class="team-row">
+        <div class="color-bar" id="ov-color-a" style="background: #3b82f6;"></div>
+        <div class="team-name" id="ov-name-a">HOME TEAM</div>
+        <div class="serve-icon active" id="ov-serve-a"><div class="vb-ball"></div></div>
+        <div class="prev-sets" id="ov-prev-a"></div>
+        <div class="sets-won" id="ov-sets-a">0</div>
+        <div class="current-score" id="ov-score-a">0</div>
+      </div>
+
+      <!-- TEAM B -->
+      <div class="team-row">
+        <div class="color-bar" id="ov-color-b" style="background: #ef4444;"></div>
+        <div class="team-name" id="ov-name-b">AWAY TEAM</div>
+        <div class="serve-icon" id="ov-serve-b"><div class="vb-ball"></div></div>
+        <div class="prev-sets" id="ov-prev-b"></div>
+        <div class="sets-won" id="ov-sets-b">0</div>
+        <div class="current-score" id="ov-score-b">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REMOTE CONTROLLER (Opened when adding ?mode=ctrl to URL) -->
+  <div id="controller-view">
+    <div class="ctrl-card status-bar">
+      <span>PRISM OVERLAY LINK</span>
+      <span id="conn-badge" class="badge badge-wait">Connecting...</span>
+    </div>
+
+    <div class="ctrl-card">
+      <input type="text" id="in-title" value="CLUB VOLLEYBALL • BEST OF 3" maxlength="32" oninput="sync()" placeholder="Match Header">
+    </div>
+
+    <div class="team-ctrl-grid">
+      <!-- TEAM A CONTROLS -->
+      <div class="team-panel">
+        <input type="text" id="in-name-a" value="HOME TEAM" maxlength="12" oninput="sync()">
+        <div class="color-picker-row">
+          <span>Jersey:</span>
+          <input type="color" id="in-color-a" value="#3b82f6" onchange="sync()">
+        </div>
+        <div class="big-score" id="ctrl-score-a">0</div>
+        <button class="btn btn-plus" onclick="addPoint('a', 1)">+1 POINT</button>
+        <button class="btn btn-minus" onclick="addPoint('a', -1)">-1 Point</button>
+        <button class="btn btn-serve serving" id="btn-serve-a" onclick="setServe('a')">🏐 SERVING</button>
+      </div>
+
+      <!-- TEAM B CONTROLS -->
+      <div class="team-panel">
+        <input type="text" id="in-name-b" value="AWAY TEAM" maxlength="12" oninput="sync()">
+        <div class="color-picker-row">
+          <span>Jersey:</span>
+          <input type="color" id="in-color-b" value="#ef4444" onchange="sync()">
+        </div>
+        <div class="big-score" id="ctrl-score-b">0</div>
+        <button class="btn btn-plus" onclick="addPoint('b', 1)">+1 POINT</button>
+        <button class="btn btn-minus" onclick="addPoint('b', -1)">-1 Point</button>
+        <button class="btn btn-serve" id="btn-serve-b" onclick="setServe('b')">SET SERVE</button>
+      </div>
+    </div>
+
+    <div class="ctrl-card" style="margin-top: 14px;">
+      <div style="font-size: 13px; font-weight: 800; margin-bottom: 8px; color: #94a3b8;">SET MANAGEMENT (BEST OF 3)</div>
+      <button class="btn btn-action" onclick="finishSet()">FINISH SET & SAVE SCORE</button>
+      <div id="set-history-list" style="font-size: 12px; color: #cbd5e1; margin: 8px 0;"></div>
+      <button class="btn btn-danger" onclick="resetMatch()" style="margin-top: 8px;">RESET ENTIRE MATCH</button>
+    </div>
+  </div>
+
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const isController = urlParams.get('mode') === 'ctrl';
+  const roomCode = urlParams.get('room') || 'vbclub2026';
+
+  let state = {
+    title: 'CLUB VOLLEYBALL • BEST OF 3',
+    nameA: 'HOME TEAM', colorA: '#3b82f6', scoreA: 0,
+    nameB: 'AWAY TEAM', colorB: '#ef4444', scoreB: 0,
+    serve: 'a',
+    completedSets: [] // Array of { a: 25, b: 21 }
+  };
+
+  let peer, conn;
+
+  if (isController) {
+    document.getElementById('overlay-view').style.display = 'none';
+    document.getElementById('controller-view').style.display = 'block';
+    initController();
+  } else {
+    initOverlay();
+  }
+
+  function initOverlay() {
+    peer = new Peer('vb-overlay-' + roomCode);
+    peer.on('connection', (connection) => {
+      conn = connection;
+      conn.on('data', (data) => {
+        state = data;
+        renderOverlay();
+      });
+    });
+    renderOverlay();
+  }
+
+  function initController() {
+    peer = new Peer();
+    peer.on('open', () => {
+      connectToOverlay();
+    });
+  }
+
+  function connectToOverlay() {
+    conn = peer.connect('vb-overlay-' + roomCode);
+    conn.on('open', () => {
+      const badge = document.getElementById('conn-badge');
